@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Figure 8</title>
+
+<script>
+    
+    var canvas;    // DOM object corresponding to the canvas
+    var graphics;  // 2D graphics context for drawing on the canvas
+
+    // this GLOBAL variable is responsible for maintaining the current
+    // set of transformations (3x3)
+    var currMatrix;
+
+
+    // animation 
+    var tick;
+    var posX, posY;
+
+    // this function multiplies the current matrix by another transformation,
+    // then updates the current matrix to the result
+    function pushMatrix(newMatrix) {
+        currMatrix = matrixMultiply(currMatrix, newMatrix); // order very important!
+
+        // note that the setTransform method clear the current matrix and then
+        // sets it to be this new one (it does not build up the transformations!)
+        graphics.setTransform(currMatrix[0][0],currMatrix[1][0],
+                           currMatrix[0][1],currMatrix[1][1],
+                           currMatrix[0][2],currMatrix[1][2]);
+    }
+
+    // reuse of codes in Lab M
+    function createMatrix(rows,cols) {
+      var M = new Array(rows);  // create space for rows
+      for (let i = 0; i < rows; i++) {
+        M[i] = new Array(cols);  // create space for elements of row i
+      }
+      return M;
+    }
+
+    // print a matrix
+    function printMatrix(M) {
+      var s = "[";
+      for (let i = 0; i < M.length; i++) {
+        s = s+"[";
+        for (let j = 0; j < M[i].length; j++) {
+          s = s+M[i][j]+"\t";
+        }
+        s = s.trim()+"]";
+        s = s+"\n ";
+      }
+      s = s.trim()+"]"
+      console.log(s);
+    }
+
+    // return a 3*3 identity Matrix
+    function identityMatrix() {
+      const rows = 3, cols = 3;
+      var M = createMatrix(rows,cols);
+      for (var i = 0; i < rows; i++) {
+        for (var j = 0; j < cols; j++) {
+          if ( i == j ) 
+            M[i][j] = 1;
+          else 
+            M[i][j] = 0;
+        }
+      }
+      return M;
+    }
+
+    // return a 3*3 scale Matrix  
+    function scaleMatrix(sx, sy) {
+      const rows = 3, cols = 3;
+      var M = createMatrix(rows,cols);
+      M[0][0] = sx; M[0][1] = 0; M[0][2] = 0; 
+      M[1][0] = 0; M[1][1] = sy; M[1][2] = 0; 
+      M[2][0] = 0; M[2][1] = 0; M[2][2] = 1; 
+      return M;
+    }
+
+    // return a 3*3 rotate Matrix  
+    // Here it suppose to be clockwise rotation
+    // But notice the x-axis is pointing downward and y-axis is pointing right 
+    // So we see it rotate counterclockwise 
+    function rotateMatrix(theta) {
+      const rows = 3, cols = 3;
+      var M = createMatrix(rows,cols);
+      M[0][0] = Math.cos(theta); M[0][1] = Math.sin(theta); M[0][2] = 0; 
+      M[1][0] = -Math.sin(theta); M[1][1] = Math.cos(theta); M[1][2] = 0; 
+      M[2][0] = 0; M[2][1] = 0; M[2][2] = 1; 
+      return M;
+    }
+
+    // return a 3*3 translate Matrix 
+    function translateMatrix(tx, ty) {
+      const rows = 3, cols = 3;
+      var M = createMatrix(rows,cols);
+      M[0][0] = 1; M[0][1] = 0; M[0][2] = tx; 
+      M[1][0] = 0; M[1][1] = 1; M[1][2] = ty; 
+      M[2][0] = 0; M[2][1] = 0; M[2][2] = 1; 
+      return M;
+    }
+
+    // return a 3*3 reflections across u Matrix 
+    function reflectionMatrix() {
+      const rows = 3, cols = 3;
+      var M = createMatrix(rows,cols);
+      M[0][0] = -1; M[0][1] = 0; M[0][2] = 0; 
+      M[1][0] = 0; M[1][1] = 1; M[1][2] = 0; 
+      M[2][0] = 0; M[2][1] = 0; M[2][2] = 1; 
+      return M;
+    }
+
+    // return a 3*3 shear along x axis Matrix 
+    function shearMatrix(lambda) {
+      const rows = 3, cols = 3;
+      var M = createMatrix(rows,cols);
+      M[0][0] = 1; M[0][1] = lambda; M[0][2] = 0; 
+      M[1][0] = 0; M[1][1] = 1; M[1][2] = 0; 
+      M[2][0] = 0; M[2][1] = 0; M[2][2] = 1; 
+      return M;
+    }
+
+    // returns the dot product of row i from matrix A
+    // and column j from matrix B
+    function rowDotCol(A,i,B,j) {
+      // TO DO:  Fill in this function
+      var sum = 0;
+      for(let k = 0; k < A[i].length; ++k) {
+        sum += A[i][k] * B[k][j];
+      }
+      return sum;
+    }
+    
+    function matrixMultiply(A,B) {
+      // TO DO:  Fill in this function
+      var newM = createMatrix(A.length, B[0].length);
+      for( var i = 0; i < A.length; i++ ){
+        for ( var j = 0; j < B[0].length; j++ ){
+          newM[i][j] = rowDotCol(A, i, B, j);
+        }
+      }
+      return newM;
+    }
+    
+    function drawSquare(color, posX, posY, width, height) {
+        //console.log("Printing the "+color+" square, current matrix:");
+        //printMatrix(currMatrix);
+        graphics.fillStyle = color;
+        graphics.fillRect(posX,posY,width,height);
+    }
+
+
+    function cleanCanvas(){
+      graphics.save();
+      graphics.setTransform(1, 0, 0, 1, 0, 0); // reset matrix to the identity
+      graphics.clearRect(0, 0, canvas.width, canvas.height); // clear canvas
+      graphics.restore(); // restore the transformations you had before
+    }
+
+    function moveRight() {
+      pushMatrix(translateMatrix(2,1));
+      posX += 2;
+      posY += 1;
+    }
+
+    function moveUp() {
+      pushMatrix(translateMatrix(0,-1));
+      posY -= 1;
+    }
+    function moveLeft() {
+      pushMatrix(translateMatrix(-2,1));
+      posX -= 2;
+      posY += 1;
+    }
+
+    function update() {
+      console.log("tick: "+tick);
+      cleanCanvas();
+      // a rly not elegant code here
+      switch(currentState) {
+        case "Right":
+          if (posX == canvas.width-40){
+            currentState = "Up";
+            break;
+          }
+          moveRight();
+          break;
+        case "Up":
+          if (posY == 0 && posX == 0){
+            currentState = "Right";
+            break;
+          }
+          if (posY == 0 && posX != 0){
+            currentState = "Left";
+            break;
+          }
+          moveUp();
+          break;
+        case "Left":
+          if (posX == 0){
+            currentState = "Up";
+            break;
+          }
+          moveLeft();
+          break;
+        default:
+      }
+      drawSquare("red", 0, 0, 40, 40);
+      tick++;
+    }
+
+    function draw() {
+        tick = 0;
+        drawSquare("red", 0, 0, 40, 40);
+        posX = 0;
+        posY = 0;
+        currentState = "Right";
+        // pass in the function name "update"
+        // not "update()" which is the return value
+        setInterval(update, 10); // 1 tick every 10ms, 100fps
+    }
+
+    
+
+    function init() {
+        canvas = document.getElementById("theCanvas");
+        graphics = canvas.getContext("2d");
+        currMatrix = identityMatrix();
+        draw();  // draw something on the canvas
+    }
+</script>
+
+
+</head>
+<body onload="init()">
+    <canvas id="theCanvas" width="440" height="240"></canvas>
+</body>
+</html>
